@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Habit } from './types';
+import { User, Habit, HabitEntry } from './types';
 import { storageService } from './services/storageService';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
@@ -16,6 +16,10 @@ const AppContent: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('landing');
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Shared Data State
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [entries, setEntries] = useState<HabitEntry[]>([]);
 
   useEffect(() => {
     // Check for existing session
@@ -26,6 +30,16 @@ const AppContent: React.FC = () => {
     }
     setIsLoading(false);
   }, []);
+
+  // Load habits and entries whenever the user changes or we return to dashboard/printable
+  useEffect(() => {
+    if (user) {
+      const userHabits = storageService.getHabits(user.id);
+      setHabits(userHabits);
+      const hIds = userHabits.map(h => h.id);
+      setEntries(storageService.getEntries(hIds));
+    }
+  }, [user, currentPage]);
 
   const handleLogin = (email: string) => {
     const authenticatedUser = storageService.loginUser(email);
@@ -48,7 +62,24 @@ const AppContent: React.FC = () => {
   const handleLogout = () => {
     storageService.setUserSession(null);
     setUser(null);
+    setHabits([]);
+    setEntries([]);
     setCurrentPage('landing');
+  };
+
+  // State update helpers for Dashboard
+  const refreshHabits = () => {
+    if (user) {
+      const updated = storageService.getHabits(user.id);
+      setHabits(updated);
+    }
+  };
+
+  const refreshEntries = () => {
+    if (user && habits.length > 0) {
+      const hIds = habits.map(h => h.id);
+      setEntries(storageService.getEntries(hIds));
+    }
   };
 
   if (isLoading) {
@@ -66,9 +97,6 @@ const AppContent: React.FC = () => {
     return <LandingPage onStart={() => setCurrentPage('signup')} />;
   }
 
-  // Dashboard Flow
-  const habits = storageService.getHabits(user.id);
-
   return (
     <Layout 
       user={user} 
@@ -76,8 +104,21 @@ const AppContent: React.FC = () => {
       currentPage={currentPage} 
       onPageChange={(page) => setCurrentPage(page as Page)}
     >
-      {currentPage === 'dashboard' && <Dashboard user={user} />}
-      {currentPage === 'printable' && <PrintableTracker user={user} habits={habits} />}
+      {currentPage === 'dashboard' && (
+        <Dashboard 
+          user={user} 
+          habits={habits} 
+          entries={entries} 
+          onHabitsChange={setHabits} 
+          onEntriesChange={setEntries}
+        />
+      )}
+      {currentPage === 'printable' && (
+        <PrintableTracker 
+          user={user} 
+          habits={habits} 
+        />
+      )}
     </Layout>
   );
 };

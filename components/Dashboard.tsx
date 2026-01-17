@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   BarChart, Bar, 
@@ -19,11 +19,13 @@ import { MONTHS, HABIT_COLORS } from '../constants';
 
 interface DashboardProps {
   user: User;
+  habits: Habit[];
+  entries: HabitEntry[];
+  onHabitsChange: (habits: Habit[]) => void;
+  onEntriesChange: (entries: HabitEntry[]) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user }) => {
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [entries, setEntries] = useState<HabitEntry[]>([]);
+const Dashboard: React.FC<DashboardProps> = ({ user, habits, entries, onHabitsChange, onEntriesChange }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   
   // Drag and Drop State
@@ -40,17 +42,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const daysInMonth = getDaysInMonth(year, month);
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  useEffect(() => {
-    loadData();
-  }, [user.id]);
-
-  const loadData = () => {
-    const userHabits = storageService.getHabits(user.id);
-    setHabits(userHabits);
-    const hIds = userHabits.map(h => h.id);
-    setEntries(storageService.getEntries(hIds));
-  };
-
   // --- Drag and Drop Handlers ---
   const handleDragStart = (index: number) => {
     setDraggedIdx(index);
@@ -65,7 +56,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       const newHabits = [...habits];
       const [movedHabit] = newHabits.splice(draggedIdx, 1);
       newHabits.splice(dropTargetIdx, 0, movedHabit);
-      setHabits(newHabits);
+      onHabitsChange(newHabits);
       storageService.updateHabitsOrder(user.id, newHabits);
     }
     setDraggedIdx(null);
@@ -76,7 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     const dateStr = formatDate(year, month, day);
     const result = storageService.toggleEntry(habitId, dateStr);
     
-    setEntries(prev => {
+    onEntriesChange(prev => {
       const idx = prev.findIndex(e => e.habitId === habitId && e.date === dateStr);
       if (idx > -1) {
         const newEntries = [...prev];
@@ -101,17 +92,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     };
 
     storageService.saveHabit(newHabit);
-    setHabits(prev => [...prev, newHabit]);
+    onHabitsChange([...habits, newHabit]);
     setNewHabitName('');
     setIsAddingHabit(false);
   };
 
   const handleDeleteHabit = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // CRITICAL: Stop drag-and-drop from stealing the click
-    if (window.confirm('Are you sure you want to delete this habit and all its performance history?')) {
+    e.preventDefault();
+    e.stopPropagation(); // Stop row drag interaction
+    
+    if (window.confirm('Are you sure you want to delete this habit and all its history?')) {
       storageService.deleteHabit(id);
-      setHabits(prev => prev.filter(h => h.id !== id));
-      setEntries(prev => prev.filter(e => e.habitId !== id));
+      // Immediately filter locally to avoid any sync lag
+      onHabitsChange(habits.filter(h => h.id !== id));
+      onEntriesChange(entries.filter(e => e.habitId !== id));
     }
   };
 
@@ -172,7 +166,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* KPI Cards Mini */}
         <div className="flex space-x-6">
            <div className="text-right">
               <p className="text-[10px] font-bold uppercase text-slate-500">Streak</p>
@@ -189,7 +182,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* ROW 1: Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-auto">
         <div className="lg:col-span-8 bg-white dark:bg-[#0f172a] rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
            <div className="flex justify-between items-center mb-4">
@@ -232,7 +224,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* ROW 2: Weekly Progress & Top 5 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
          <div className="lg:col-span-8 bg-white dark:bg-[#0f172a] rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex justify-between items-center mb-6">
@@ -288,7 +279,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
          </div>
       </div>
 
-      {/* Monthly Tracking Grid */}
       <div className="bg-white dark:bg-[#0f172a] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
          <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
